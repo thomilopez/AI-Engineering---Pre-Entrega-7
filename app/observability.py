@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import os
-import io
 import sys
 import functools
 from typing import Any, Callable
@@ -30,7 +29,7 @@ def setup_observability() -> dict[str, Any]:
         'langsmith_project': None,
     }
 
-    # 1. LangSmith
+    # 1. LangSmith (Trazabilidad cloud nativa)
     langsmith_api_key = os.getenv('LANGCHAIN_API_KEY')
     langsmith_tracing = os.getenv('LANGCHAIN_TRACING_V2', 'false').lower() == 'true'
     if langsmith_api_key and langsmith_tracing:
@@ -39,7 +38,7 @@ def setup_observability() -> dict[str, Any]:
         status['langsmith_project'] = project
         logger.info(f'[Observabilidad] LangSmith activo en proyecto {project}')
 
-    # 2. Arize Phoenix
+    # 2. Arize Phoenix (Servidor y exportador OpenTelemetry)
     enable_phoenix = os.getenv('ENABLE_PHOENIX', 'true').lower() == 'true'
     if enable_phoenix and not _instrumented:
         try:
@@ -54,21 +53,20 @@ def setup_observability() -> dict[str, Any]:
                 status['phoenix_ui_url'] = ui_url
                 logger.info(f'[Observabilidad] Arize Phoenix UI iniciado en: {ui_url}')
             except Exception as ex:
-                logger.info(f'[Observabilidad] Servidor Phoenix activo en puerto {port} ({ex})')
                 ui_url = f'http://localhost:{port}'
                 status['phoenix_ui_url'] = ui_url
+                logger.info(f'[Observabilidad] Conectando a Phoenix existente en: {ui_url} ({ex})')
 
-            # Configurar TracerProvider apuntando al proyecto default
+            # Registrar tracer_provider hacia http://127.0.0.1:6006/v1/traces en proyecto default
             _tracer_provider = register(
                 project_name='default',
                 endpoint=f'http://127.0.0.1:{port}/v1/traces'
             )
 
-            # Instrumentar LangChain con el provider
             LangChainInstrumentor().instrument(tracer_provider=_tracer_provider)
             _instrumented = True
             status['phoenix_active'] = True
-            logger.info(f'[Observabilidad] Phoenix OpenTelemetry registrado hacia {ui_url}/v1/traces (Project: default)')
+            logger.info('[Observabilidad] Phoenix LangChainInstrumentor registrado correctamente en proyecto default.')
         except Exception as e:
             logger.error(f'[Observabilidad] Error configurando Arize Phoenix: {e}')
 
