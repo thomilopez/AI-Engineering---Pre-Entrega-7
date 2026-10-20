@@ -1,0 +1,22 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Caché y compilación
+__pycache__/
+*.pyc
+*.pyo
+
+# Variables de entorno y secretos (NUNCA SUBIR A GIT)
+.env
+*.env
+
+# Diagramas generados
+graph_diagram.png
+
+# IDEs y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
