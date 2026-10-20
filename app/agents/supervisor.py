@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from typing import Any
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_openai import ChatOpenAI
+from app.llm_factory import get_llm
 
 from state import MultiAgentState, SupervisorRoute
 
@@ -47,11 +47,10 @@ Sintetiza un informe final claro, profesional y estructurado que responda a la s
 async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
     """Nodo del Supervisor: decide el siguiente paso o produce la síntesis final."""
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("Falta 'OPENAI_API_KEY' en el entorno.")
+    # api_key check handled in factory
 
     model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
-    llm = ChatOpenAI(model=model_name, temperature=0.0)
+    llm = get_llm(temperature=0.0)
 
     current_iterations = state.get("iterations", 0) + 1
     has_research = state.get("researcher_output") is not None
@@ -82,7 +81,7 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
         )
     else:
         # Validación aprobada: delegación estructurada a FINISH
-        structured_supervisor = llm.with_structured_output(SupervisorRoute)
+        structured_supervisor = llm.with_structured_output(SupervisorRoute, method="json_mode")
         decision_input = (
             f"Estado actual de la tarea: '{state.get('task_description')}'.\n"
             f"Research: Completado.\n"
@@ -91,7 +90,7 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
             f"Decide si es momento de FINISH o si se requiere refinar."
         )
         route = await structured_supervisor.ainvoke([
-            SystemMessage(content=SUPERVISOR_ROUTING_PROMPT),
+            SystemMessage(content=SUPERVISOR_ROUTING_PROMPT, method="json_mode"),
             HumanMessage(content=decision_input),
         ])
 

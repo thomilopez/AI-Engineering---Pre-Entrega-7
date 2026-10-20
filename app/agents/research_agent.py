@@ -9,7 +9,7 @@ import json
 import os
 from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_openai import ChatOpenAI
+from app.llm_factory import get_llm
 
 from state import MultiAgentState, ResearchArtifact
 from tools import RESEARCHER_TOOLS
@@ -29,11 +29,10 @@ NO inventes métricas. Todo dato debe provenir de las herramientas.
 async def research_agent_node(state: MultiAgentState) -> dict[str, Any]:
     """Nodo ejecutor del agente de investigación con ciclo de invocación y estructuración Pydantic."""
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("Falta 'OPENAI_API_KEY' en el entorno.")
+    # api_key check handled in factory
 
     model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
-    llm = ChatOpenAI(model=model_name, temperature=0.0)
+    llm = get_llm(temperature=0.0)
     llm_with_tools = llm.bind_tools(RESEARCHER_TOOLS)
 
     # Contexto mínimo: sólo la tarea asignada para evitar contaminación de contexto
@@ -63,7 +62,7 @@ async def research_agent_node(state: MultiAgentState) -> dict[str, Any]:
         raw_data = json.loads(RESEARCHER_TOOLS[0].invoke({"cluster_id": "cloud-cluster-prod"}))
 
     # 3. Estructuración formal mediante Pydantic (ResearchArtifact)
-    structured_llm = llm.with_structured_output(ResearchArtifact)
+    structured_llm = llm.with_structured_output(ResearchArtifact, method="json_mode")
     structuring_prompt = (
         f"Convierte la siguiente evidencia recolectada en un ResearchArtifact válido:\n"
         f"Tema: {task_desc}\n"

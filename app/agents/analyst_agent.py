@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_openai import ChatOpenAI
+from app.llm_factory import get_llm
 
 from state import MultiAgentState, AnalysisArtifact
 from tools import calculate_availability_score, calculate_resource_stress_index, ANALYST_TOOLS
@@ -33,11 +33,10 @@ REGLAS:
 async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
     """Nodo ejecutor del agente analista con aislamiento de escritura sobre 'analyst_output'."""
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("Falta 'OPENAI_API_KEY' en el entorno.")
+    # api_key check handled in factory
 
     model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
-    llm = ChatOpenAI(model=model_name, temperature=0.0)
+    llm = get_llm(temperature=0.0)
 
     research_artifact = state.get("researcher_output")
     if not research_artifact:
@@ -65,7 +64,7 @@ async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
     stress_res = json.loads(stress_res_str)
 
     # 2. Generación estructurada de AnalysisArtifact con Pydantic
-    structured_llm = llm.with_structured_output(AnalysisArtifact)
+    structured_llm = llm.with_structured_output(AnalysisArtifact, method="json_mode")
     analysis_prompt = (
         f"Genera un AnalysisArtifact riguroso basado en estos cómputos determinísticos realizados:\n"
         f"Datos Base: {json.dumps(datos, ensure_ascii=False)}\n"
