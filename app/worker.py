@@ -63,7 +63,6 @@ async def execute_task_background(job_id: str, prompt: str) -> None:
                     )
                     return
 
-
         completed_at = datetime.now(timezone.utc).isoformat()
         serialized_result = _extract_task_summary(final_state)
 
@@ -150,9 +149,19 @@ async def resume_task_after_approval(
         )
 
 
+def _serialize_artifact(artifact: Any) -> Any:
+    if artifact is None:
+        return None
+    if hasattr(artifact, 'model_dump'):
+        return artifact.model_dump()
+    if isinstance(artifact, dict):
+        return artifact
+    return str(artifact)
+
+
 def _extract_task_summary(state: Optional[dict[str, Any]]) -> dict[str, Any]:
     if not state:
-        return  {"summary": 'Sin datos de salida'}
+        return {'summary': 'Sin datos de salida'}
 
     last_message = ''
     messages = state.get('messages', [])
@@ -163,8 +172,8 @@ def _extract_task_summary(state: Optional[dict[str, Any]]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         'final_message': last_message,
         'iterations': state.get('iterations', 0),
-        'researcher_output': state['researcher_output'].model_dump() if state.get('researcher_output') else None,
-        'analyst_output': state['analyst_output'].model_dump() if state.get('analyst_output') else None,
-        'validation_output': state['validation_output'].model_dump() if state.get('validation_output') else None,
+        'researcher_output': _serialize_artifact(state.get('researcher_output')),
+        'analyst_output': _serialize_artifact(state.get('analyst_output')),
+        'validation_output': _serialize_artifact(state.get('validation_output')),
     }
     return summary

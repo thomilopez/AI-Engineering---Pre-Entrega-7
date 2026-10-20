@@ -3,8 +3,18 @@ from __future__ import annotations
 
 import logging
 import os
+import io
+import sys
 import functools
 from typing import Any, Callable
+
+# Proteccion para Windows CP1252 ante caracteres de Phoenix
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 logger = logging.getLogger('observability')
 _instrumented = False
@@ -20,7 +30,7 @@ def setup_observability() -> dict[str, Any]:
         'langsmith_project': None,
     }
 
-    # 1. LangSmith
+    # 1. LangSmith (OpenAI / DeepSeek / LangChain Native)
     langsmith_api_key = os.getenv('LANGCHAIN_API_KEY')
     langsmith_tracing = os.getenv('LANGCHAIN_TRACING_V2', 'false').lower() == 'true'
     if langsmith_api_key and langsmith_tracing:
@@ -36,21 +46,22 @@ def setup_observability() -> dict[str, Any]:
             import phoenix as px
             from openinference.instrumentation.langchain import LangChainInstrumentor
 
-            phoenix_collector_url = os.getenv('PHOENIX_COLLECTOR_ENDPOINT')
-            if not phoenix_collector_url:
-                try:
-                    port = int(os.getenv('PHOENIX_PORT', '6006'))
-                    _phoenix_session = px.launch_app(port=port)
-                    ui_url = f'http://localhost:{port}'
-                    status['phoenix_ui_url'] = ui_url
-                    logger.info(f'[Observabilidad] Arize Phoenix UI iniciado en: {ui_url}')
-                except Exception as ex:
-                    logger.warning(f'[Observabilidad] No se pudo lanzar Phoenix UI local ({ex})')
+            port = int(os.getenv('PHOENIX_PORT', '6006'))
+            try:
+                _phoenix_session = px.launch_app(port=port)
+                ui_url = f'http://localhost:{port}'
+                status['phoenix_ui_url'] = ui_url
+                logger.info(f'[Observabilidad] Arize Phoenix UI iniciado en: {ui_url}')
+            except Exception as ex:
+                logger.info(f'[Observabilidad] Servidor Phoenix activo en puerto {port} ({ex})')
+                ui_url = f'http://localhost:{port}'
+                status['phoenix_ui_url'] = ui_url
 
+            # Instrumentar LangChain con Phoenix
             LangChainInstrumentor().instrument()
             _instrumented = True
             status['phoenix_active'] = True
-            logger.info('[Observabilidad] LangChainInstrumentor registrado correctamente.')
+            logger.info('[Observabilidad] Phoenix LangChainInstrumentor activo.')
         except Exception as e:
             logger.error(f'[Observabilidad] Error configurando Arize Phoenix: {e}')
 

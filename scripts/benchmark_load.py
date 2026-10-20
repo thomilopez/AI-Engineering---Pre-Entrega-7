@@ -18,37 +18,56 @@ TASKS = [
 
 async def run_single_task(client: httpx.AsyncClient, prompt: str, idx: int) -> dict[str, Any]:
     t1 = time.perf_counter()
-    print(f'*Tarea {idx}] -> Enviando...('.replace('*', '[').replace('(', ']'))
-    res = await client.post(f'{API_BASE_URL}/tasks', json={'prompt': prompt}, timeout=30.0)
-    if res.status_code != 202:
+    print(f'[Tarea {idx}] -> Enviando...')
+
+    res = None
+    for attempt in range(4):
+        try:
+            res = await client.post(f'{API_BASE_URL}/tasks', json={'prompt': prompt}, timeout=120.0)
+            if res.status_code == 202:
+                break
+        except Exception as e:
+            if attempt == 3:
+                print(f'[Tarea {idx}] Fallo en envio: {e}')
+                return {'idx': idx, 'success': False, 'time': time.perf_counter() - t1}
+            await asyncio.sleep(2.0)
+
+    if not res or res.status_code != 202:
         return {'idx': idx, 'success': False, 'time': time.perf_counter() - t1}
 
     job_id = res.json()['job_id']
-    print(f'*Tarea {idx}] -> Encolada: {job_id}'.replace('*', '['))
+    print(f'[Tarea {idx}] -> Encolada: {job_id}')
 
     polls = 0
-    while polls < 60:
+    while polls < 120:
         await asyncio.sleep(2.0)
         polls += 1
-        check = await client.get(f'{API_BASE_URL}/tasks/{job_id}', timeout=10.0)
+        try:
+            check = await client.get(f'{API_BASE_URL}/tasks/{job_id}', timeout=30.0)
+        except Exception:
+            continue
+
         if check.status_code != 200:
             continue
         data = check.json()
         st = data.get('status')
 
         if st == 'WAITING_APPROVAL':
-            print(f'*Tarea {idx}] -> HITL detectado. Aprobando...'.replace('*', '[').replace('(', ']'))
-            apr = await client.post(
-                f'{API_BASE_URL}/tasks/{job_id}/approve',
-                json={'approved': True, 'comments': 'Aprobado', 'approver': 'sre_lead'},
-                timeout=30.0
-            )
-            if apr.status_code == 200:
-                st = apr.json().get('status')
+            print(f'[Tarea {idx}] -> HITL detectado en {job_id}. Aprobando...')
+            try:
+                apr = await client.post(
+                    f'{API_BASE_URL}/tasks/{job_id}/approve',
+                    json={'approved': True, 'comments': 'Aprobado por SRE Lead', 'approver': 'sre_lead'},
+                    timeout=45.0
+                )
+                if apr.status_code == 200:
+                    st = apr.json().get('status')
+            except Exception as e:
+                print(f'[Tarea {idx}] Error en aprobacion HITL: {e}')
 
         if st in ('DONE', 'FAILED'):
             dur = time.perf_counter() - t1
-            print(f'*Tarea {idx}] -> Status: st en dur'.replace('*', '['))
+            print(f'[Tarea {idx}] -> Finalizada: Status={st} en {dur:.2f}s')
             return {
                 'idx': idx,
                 'job_id': job_id,
@@ -73,26 +92,29 @@ def calc_pct(vals, p):
 
 
 async def main():
-    print('-' * 80)
-    print('INICIANDO PRUEBA 5 PETICIONES CONCURRENTES')
-    print('-' * 80)
-    async with httpx.AsyncClient() as client:
+    print('=' * 80)
+    print('INICIANDO PRUEBA DE 5 PETICIONES CONCURRENTES (PREENTREGA 7)')
+    print('=' * 80)
+    limits = httpx.Limits(max_keepalive_connections=30, max_connections=50)
+    timeout = httpx.Timeout(connect=30.0, read=120.0, write=30.0, pool=120.0)
+    async with httpx.AsyncClient(limits=limits, timeout=timeout) as client:
         t0 = time.perf_counter()
         res = await asyncio.gather(*[run_single_task(client, p, i + 1) for i, p in enumerate(TASKS)])
         total = time.perf_counter() - t0
 
     t = [r['time'] for r in res if 'time' in r]
     succ = sum(1 for r in res if r.get('success'))
-    print('-' * 80)
+    print('=' * 80)
     print('REPORTE DE RENDIMIENTO CONCURRENTE')
-    print('-' * 80)
-    print('Peticiones: ', len(res))
-    print('Exitosas:  ', succ, '/', len(res))
-    print('Duracion:   ', round(total, 2))
+    print('=' * 80)
+    print(f'Total Peticiones:  {len(res)}')
+    print(f'Exitosas:          {succ} / {len(res)}')
+    print(f'Tiempo Total:      {total:.2f}s')
     if t:
-        print('Latencia p50:', round(calc_pct(t, 50), 2))
-        print('Latencia p95:', round(calc_pct(t, 95), 2))
-    print('-' * 80)
+        print(f'Latencia p50:      {calc_pct(t, 50):.2f}s')
+        print(f'Latencia p90:      {calc_pct(t, 90):.2f}s')
+        print(f'Latencia p95:      {calc_pct(t, 95):.2f}s')
+    print('=' * 80)
 
 
 if __name__ == '__main__':

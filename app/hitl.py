@@ -20,8 +20,12 @@ class ApprovalRequest(BaseModel):
 
 def is_task_critical(state: MultiAgentState) -> bool:
     analyst_out = state.get('analyst_output')
-    if analyst_out and analyst_out.evaluacion_riesgo in ('ALTO', 'CRITICO'):
-        return True
+    if analyst_out:
+        risk = getattr(analyst_out, 'evaluacion_riesgo', None)
+        if risk is None and isinstance(analyst_out, dict):
+            risk = analyst_out.get('evaluacion_riesgo')
+        if risk in ('ALTO', 'CRITICO'):
+            return True
 
     task_desc = (state.get('task_description') or '').lower()
     critical_keywords = ['produccion', 'prod', 'cluster', 'reinicio', 'mitigacion', 'failover', 'alta criticidad']
@@ -40,8 +44,11 @@ async def human_approval_node(state: MultiAgentState) -> dict[str, Any]:
     logger.info('[HITL] Tarea CRITICA detectada. Solicitando aprobacion humana obligatoria...')
 
     analyst_out = state.get('analyst_output')
-    risk = analyst_out.evaluacion_riesgo if analyst_out else 'ALTO'
-    metric_val = analyst_out.resultado_calculo if analyst_out else 'N/A'
+    risk = 'ALTO'
+    metric_val = 'N/A'
+    if analyst_out:
+        risk = getattr(analyst_out, 'evaluacion_riesgo', None) or (analyst_out.get('evaluacion_riesgo', 'ALTO') if isinstance(analyst_out, dict) else 'ALTO')
+        metric_val = getattr(analyst_out, 'resultado_calculo', None) or (analyst_out.get('resultado_calculo', 'N/A') if isinstance(analyst_out, dict) else 'N/A')
 
     interrupt_payload = {
         'type': 'HUMAN_APPROVAL_REQUIRED',

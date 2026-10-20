@@ -13,9 +13,9 @@ from typing import Any
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from app.llm_factory import get_llm, invoke_structured
 
-from state import MultiAgentState, SupervisorRoute
+from app.state import MultiAgentState, SupervisorRoute
 
-SUPERVISOR_ROUTING_PROMPT = """Eres el Supervisor. Responde siempre en formato JSON. de un Sistema Multi-Agente de Arquitectura de Software.
+SUPERVISOR_ROUTING_PROMPT = """Eres el Supervisor de un Sistema Multi-Agente de Arquitectura de Software.
 Tu responsabilidad es dirigir el flujo de trabajo entre los siguientes especialistas:
 
 1. 'researcher' (Agente de Investigación):
@@ -47,7 +47,6 @@ Sintetiza un informe final claro, profesional y estructurado que responda a la s
 async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
     """Nodo del Supervisor: decide el siguiente paso o produce la síntesis final."""
     api_key = os.getenv("OPENAI_API_KEY")
-    # api_key check handled in factory
 
     model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
     llm = get_llm(temperature=0.0)
@@ -81,16 +80,16 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
         )
     else:
         # Validación aprobada: delegación estructurada a FINISH
-        structured_supervisor = llm.with_structured_output(SupervisorRoute, method="json_mode")
+        # structured_supervisor
         decision_input = (
             f"Estado actual de la tarea: '{state.get('task_description')}'.\n"
             f"Research: Completado.\n"
             f"Analysis: Completado.\n"
             f"Validation: Aprobada con éxito.\n"
-            f"Decide si es momento de FINISH o si se requiere refinar. Responde en formato JSON valido."
+            f"Decide si es momento de FINISH o si se requiere refinar."
         )
-        route = await structured_supervisor.ainvoke([
-            SystemMessage(content=SUPERVISOR_ROUTING_PROMPT, method="json_mode"),
+        route = await invoke_structured(llm, SupervisorRoute, [
+            SystemMessage(content=SUPERVISOR_ROUTING_PROMPT),
             HumanMessage(content=decision_input),
         ])
 

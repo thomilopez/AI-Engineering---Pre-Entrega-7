@@ -1,4 +1,4 @@
-"""Especialista en Análisis y Cómputo Cuantitativo.
+﻿"""Especialista en Análisis y Cómputo Cuantitativo.
 
 Responsabilidad única: Tomar la evidencia aportada por el ResearchAgent,
 ejecutar cálculos numéricos precisos con herramientas matemáticas (disponibilidad y estrés)
@@ -12,10 +12,10 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from app.llm_factory import get_llm, invoke_structured
 
-from state import MultiAgentState, AnalysisArtifact
-from tools import calculate_availability_score, calculate_resource_stress_index, ANALYST_TOOLS
+from app.state import MultiAgentState, AnalysisArtifact
+from app.tools import calculate_availability_score, calculate_resource_stress_index, ANALYST_TOOLS
 
-SYSTEM_PROMPT = """Eres el Especialista en analisis JSON de Cómputo y Análisis Cuantitativo de Arquitectura.
+SYSTEM_PROMPT = """Eres el Especialista de Cómputo y Análisis Cuantitativo de Arquitectura.
 Tu única función es:
 1. Leer los datos numéricos extraídos por el Agente de Investigación.
 2. Utilizar las herramientas de cálculo ('calculate_availability_score' y 'calculate_resource_stress_index')
@@ -33,7 +33,6 @@ REGLAS:
 async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
     """Nodo ejecutor del agente analista con aislamiento de escritura sobre 'analyst_output'."""
     api_key = os.getenv("OPENAI_API_KEY")
-    # api_key check handled in factory
 
     model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
     llm = get_llm(temperature=0.0)
@@ -64,7 +63,20 @@ async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
     stress_res = json.loads(stress_res_str)
 
     # 2. Generación estructurada de AnalysisArtifact con Pydantic
-    artifact = await invoke_structured(llm, AnalysisArtifact, [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=analysis_prompt)])
+    # structured_llm bypassed
+    analysis_prompt = (
+        f"Genera un AnalysisArtifact riguroso basado en estos cómputos determinísticos realizados:\n"
+        f"Datos Base: {json.dumps(datos, ensure_ascii=False)}\n"
+        f"Cálculo de Disponibilidad: {avail_res_str}\n"
+        f"Cálculo de Estrés de Recursos: {stress_res_str}\n"
+        f"Establece la 'metrica_principal' como 'Disponibilidad y Tasa de Error', "
+        f"'resultado_calculo' con la tasa de disponibilidad ({avail_res['availability_pct']}), "
+        f"'evaluacion_riesgo' adecuada, conclusiones técnicas fundamentadas y un confidence_score (ej: 0.98)."
+    )
+    artifact = await invoke_structured(llm, AnalysisArtifact, [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=analysis_prompt),
+    ])
 
     # 3. Aislamiento de Escritura: sólo 'analyst_output'
     summary_msg = AIMessage(
@@ -79,3 +91,4 @@ async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
         "messages": [summary_msg],
         "analyst_output": artifact,
     }
+
