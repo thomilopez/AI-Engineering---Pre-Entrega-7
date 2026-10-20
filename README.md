@@ -1,4 +1,4 @@
-# API de Produccion y Monitoreo Activo - Pre-entrega 7
+﻿# API de Produccion y Monitoreo Activo - Pre-entrega 7
 
 > **Sistema Multi-Agente asincrono, desacoplado con Redis, Human-in-the-Loop (HITL) y Observabilidad (Arize Phoenix / LangSmith).**
 
@@ -28,22 +28,23 @@ En este Modulo 7 se evoluciona el orquestador multi-agente del Modulo 6 para con
 ---
 
 ## Estructura del Repositorio
-`
+
+`	ext
 mi-api-agente/
 ├── app/
 │   ├── main.py            # FastAPI: POST /tasks (async), GET /tasks/{id}, POST /tasks/{id}/approve
 │   ├── graph.py           # Orquestador M6 + Redis Checkpointer + Nodo HITL
-│   ├── worker.py          # Worker asincrono y transiciones de estado
-│   ├── observability.py   # Setup de Arize Phoenix / LangSmith y decoradores
+│   ├── worker.py          # Worker asincrono y transiciones de estado (PENDING/RUNNING/DONE/FAILED)
+│   ├── observability.py   # Setup de Arize Phoenix / LangSmith y decoradores de trazas
 │   ├── hitl.py            # Nodo Human-in-the-Loop (interrupt)
 │   ├── redis_state.py     # Gestor de estado persistente y checkpointer
-│   ├── state.py           # MultiAgentState y artefactos Pydantic
+│   ├── state.py           # MultiAgentState y esquemas estructurados Pydantic
 │   ├── tools.py           # Herramientas del sistema
-│   └── agents/            # Supervisor, Researcher, Analyst, Validator
+│   └── agents/            # Supervisor, ResearchAgent, AnalystAgent, Validator
 ├── scripts/
 │   └── benchmark_load.py  # Script de carga concurrente (5 peticiones), polling y latencia p95
 ├── screenshots/           # Capturas y reportes de trazas, costos y latencia p95
-├── docker-compose.yml     # Orquestacion multi-contenedor (API + Redis + Phoenix)
+├── docker-compose.yml     # Orquestacion multi-contenedor (API + Redis + Arize Phoenix)
 ├── Dockerfile             # Imagen Docker para FastAPI
 ├── .env.example           # Variables de entorno
 ├── requirements.txt       # Dependencias
@@ -68,6 +69,7 @@ Configurar en .env:
 - OPENAI_API_KEY: Tu clave de OpenAI.
 - REDIS_URL: edis://localhost:6379/0 (o el servicio de Redis).
 - ENABLE_PHOENIX: 	rue
+- PHOENIX_PORT: 6006
 
 ---
 
@@ -78,7 +80,7 @@ Configurar en .env:
 docker compose up --build
 `
 Servicios disponibles:
-- **FastAPI API**: http://localhost:8000 (Documentacion Swagger en http://localhost:8000/docs)
+- **FastAPI API**: http://localhost:8000 (Swagger UI interactivo en http://localhost:8000/docs)
 - **Arize Phoenix UI**: http://localhost:6006
 - **Redis Server**: redis://localhost:6379
 
@@ -86,12 +88,12 @@ Servicios disponibles:
 `ash
 uvicorn app.main:app --reload --port 8000
 `
-(Si Redis no esta corriendo en local, el sistema activa un backend compatible en memoria sin interrumpir el funcionamiento).
+(Si Redis no esta corriendo en local, el sistema activa de forma transparente un backend de estado compatible en memoria sin interrumpir el funcionamiento de la API).
 
 ---
 
 ## Prueba de Carga Concurrente (5 Peticiones)
-Para verificar la asincronia no bloqueante, ejecuta:
+Para verificar la asincronia no bloqueante, ejecuta en una terminal secundaria:
 `ash
 python scripts/benchmark_load.py
 `
@@ -104,8 +106,8 @@ El script realiza:
 ---
 
 ## Flujo Human-in-the-Loop (HITL)
-Cuando una tarea es calificada como critica, el nodo human_approval activa una interrupcion de LangGraph y actualiza el estado en Redis a WAITING_APPROVAL.
-Para reanudarla:
+Cuando una tarea es calificada como critica, el nodo human_approval activa una interrupcion nativa de LangGraph y actualiza el estado en Redis a WAITING_APPROVAL.
+Para reanudarla manualmente desde consola:
 `ash
 curl -X POST  http://localhost:8000/tasks/<job_id>/approve \
      -H Content-Type: application/json \
