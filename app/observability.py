@@ -8,7 +8,6 @@ import sys
 import functools
 from typing import Any, Callable
 
-# Proteccion para Windows CP1252 ante caracteres de Phoenix
 if sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -19,10 +18,11 @@ if sys.platform == 'win32':
 logger = logging.getLogger('observability')
 _instrumented = False
 _phoenix_session = None
+_tracer_provider = None
 
 
 def setup_observability() -> dict[str, Any]:
-    global _instrumented, _phoenix_session
+    global _instrumented, _phoenix_session, _tracer_provider
     status = {
         'phoenix_active': False,
         'phoenix_ui_url': None,
@@ -30,7 +30,7 @@ def setup_observability() -> dict[str, Any]:
         'langsmith_project': None,
     }
 
-    # 1. LangSmith (OpenAI / DeepSeek / LangChain Native)
+    # 1. LangSmith
     langsmith_api_key = os.getenv('LANGCHAIN_API_KEY')
     langsmith_tracing = os.getenv('LANGCHAIN_TRACING_V2', 'false').lower() == 'true'
     if langsmith_api_key and langsmith_tracing:
@@ -44,6 +44,7 @@ def setup_observability() -> dict[str, Any]:
     if enable_phoenix and not _instrumented:
         try:
             import phoenix as px
+            from phoenix.otel import register
             from openinference.instrumentation.langchain import LangChainInstrumentor
 
             port = int(os.getenv('PHOENIX_PORT', '6006'))
@@ -57,15 +58,30 @@ def setup_observability() -> dict[str, Any]:
                 ui_url = f'http://localhost:{port}'
                 status['phoenix_ui_url'] = ui_url
 
-            # Instrumentar LangChain con Phoenix
-            LangChainInstrumentor().instrument()
+            # Configurar TracerProvider apuntando al proyecto default
+            _tracer_provider = register(
+                project_name='default',
+                endpoint=f'http://127.0.0.1:{port}/v1/traces'
+            )
+
+            # Instrumentar LangChain con el provider
+            LangChainInstrumentor().instrument(tracer_provider=_tracer_provider)
             _instrumented = True
             status['phoenix_active'] = True
-            logger.info('[Observabilidad] Phoenix LangChainInstrumentor activo.')
+            logger.info(f'[Observabilidad] Phoenix OpenTelemetry registrado hacia {ui_url}/v1/traces (Project: default)')
         except Exception as e:
             logger.error(f'[Observabilidad] Error configurando Arize Phoenix: {e}')
 
     return status
+
+
+def flush_phoenix_traces() -> None:
+    global _tracer_provider
+    if _tracer_provider is not None:
+        try:
+            _tracer_provider.force_flush()
+        except Exception:
+            pass
 
 
 def trace_agent_execution(agent_name: str) -> Callable:
