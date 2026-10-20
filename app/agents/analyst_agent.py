@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from app.llm_factory import get_llm
+from app.llm_factory import get_llm, invoke_structured
 
 from state import MultiAgentState, AnalysisArtifact
 from tools import calculate_availability_score, calculate_resource_stress_index, ANALYST_TOOLS
@@ -64,20 +64,7 @@ async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
     stress_res = json.loads(stress_res_str)
 
     # 2. Generación estructurada de AnalysisArtifact con Pydantic
-    structured_llm = llm.with_structured_output(AnalysisArtifact, method="json_mode")
-    analysis_prompt = (
-        f"Genera un AnalysisArtifact riguroso en formato JSON basado en estos cómputos determinísticos realizados:\n"
-        f"Datos Base: {json.dumps(datos, ensure_ascii=False)}\n"
-        f"Cálculo de Disponibilidad: {avail_res_str}\n"
-        f"Cálculo de Estrés de Recursos: {stress_res_str}\n"
-        f"Establece la 'metrica_principal' como 'Disponibilidad y Tasa de Error', "
-        f"'resultado_calculo' con la tasa de disponibilidad ({avail_res['availability_pct']}), "
-        f"'evaluacion_riesgo' adecuada, conclusiones técnicas fundamentadas y un confidence_score (ej: 0.98)."
-    )
-    artifact = await structured_llm.ainvoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=analysis_prompt),
-    ])
+    artifact = await invoke_structured(llm, AnalysisArtifact, [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=analysis_prompt)])
 
     # 3. Aislamiento de Escritura: sólo 'analyst_output'
     summary_msg = AIMessage(

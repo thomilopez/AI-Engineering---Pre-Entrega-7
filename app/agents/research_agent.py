@@ -9,7 +9,7 @@ import json
 import os
 from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from app.llm_factory import get_llm
+from app.llm_factory import get_llm, invoke_structured
 
 from state import MultiAgentState, ResearchArtifact
 from tools import RESEARCHER_TOOLS
@@ -62,15 +62,7 @@ async def research_agent_node(state: MultiAgentState) -> dict[str, Any]:
         raw_data = json.loads(RESEARCHER_TOOLS[0].invoke({"cluster_id": "cloud-cluster-prod"}))
 
     # 3. Estructuración formal mediante Pydantic (ResearchArtifact)
-    structured_llm = llm.with_structured_output(ResearchArtifact, method="json_mode")
-    structuring_prompt = (
-        f"Convierte la siguiente evidencia recolectada en un ResearchArtifact válido:\n"
-        f"Tema: {task_desc}\n"
-        f"Fuentes: {fuentes}\n"
-        f"Datos Brutos: {json.dumps(raw_data, ensure_ascii=False)}\n"
-        f"Asegúrate de asignar un confidence_score coherente (ej: 0.95 si los datos están completos)."
-    )
-    artifact = await structured_llm.ainvoke([HumanMessage(content=structuring_prompt)])
+    artifact = await invoke_structured(llm, ResearchArtifact, [HumanMessage(content=structuring_prompt)])
 
     # 4. Aislamiento de Escritura: sólo actualizamos 'researcher_output' y agregamos un mensaje
     summary_msg = AIMessage(

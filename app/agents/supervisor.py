@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from typing import Any
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from app.llm_factory import get_llm
+from app.llm_factory import get_llm, invoke_structured
 
 from state import MultiAgentState, SupervisorRoute
 
