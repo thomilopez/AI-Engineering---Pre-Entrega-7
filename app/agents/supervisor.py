@@ -15,7 +15,7 @@ from app.llm_factory import get_llm
 
 from state import MultiAgentState, SupervisorRoute
 
-SUPERVISOR_ROUTING_PROMPT = """Eres el Supervisor de un Sistema Multi-Agente de Arquitectura de Software.
+SUPERVISOR_ROUTING_PROMPT = """Eres el Supervisor. Responde siempre en formato JSON. de un Sistema Multi-Agente de Arquitectura de Software.
 Tu responsabilidad es dirigir el flujo de trabajo entre los siguientes especialistas:
 
 1. 'researcher' (Agente de Investigación):
@@ -87,7 +87,7 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
             f"Research: Completado.\n"
             f"Analysis: Completado.\n"
             f"Validation: Aprobada con éxito.\n"
-            f"Decide si es momento de FINISH o si se requiere refinar."
+            f"Decide si es momento de FINISH o si se requiere refinar. Responde en formato JSON valido."
         )
         route = await structured_supervisor.ainvoke([
             SystemMessage(content=SUPERVISOR_ROUTING_PROMPT, method="json_mode"),

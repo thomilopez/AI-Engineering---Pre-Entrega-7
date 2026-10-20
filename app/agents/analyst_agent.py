@@ -15,7 +15,7 @@ from app.llm_factory import get_llm
 from state import MultiAgentState, AnalysisArtifact
 from tools import calculate_availability_score, calculate_resource_stress_index, ANALYST_TOOLS
 
-SYSTEM_PROMPT = """Eres el Especialista de Cómputo y Análisis Cuantitativo de Arquitectura.
+SYSTEM_PROMPT = """Eres el Especialista en analisis JSON de Cómputo y Análisis Cuantitativo de Arquitectura.
 Tu única función es:
 1. Leer los datos numéricos extraídos por el Agente de Investigación.
 2. Utilizar las herramientas de cálculo ('calculate_availability_score' y 'calculate_resource_stress_index')
@@ -66,7 +66,7 @@ async def analyst_agent_node(state: MultiAgentState) -> dict[str, Any]:
     # 2. Generación estructurada de AnalysisArtifact con Pydantic
     structured_llm = llm.with_structured_output(AnalysisArtifact, method="json_mode")
     analysis_prompt = (
-        f"Genera un AnalysisArtifact riguroso basado en estos cómputos determinísticos realizados:\n"
+        f"Genera un AnalysisArtifact riguroso en formato JSON basado en estos cómputos determinísticos realizados:\n"
         f"Datos Base: {json.dumps(datos, ensure_ascii=False)}\n"
         f"Cálculo de Disponibilidad: {avail_res_str}\n"
         f"Cálculo de Estrés de Recursos: {stress_res_str}\n"
