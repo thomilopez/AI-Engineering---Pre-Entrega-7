@@ -20,3 +20,8 @@ graph_diagram.png
 .idea/
 .DS_Store
 Thumbs.db
+
+# Bases de datos locales de checkpoints
+*.db
+*.db-shm
+*.db-wal

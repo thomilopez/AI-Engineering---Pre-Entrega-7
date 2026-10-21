@@ -38,8 +38,8 @@ def setup_observability() -> dict[str, Any]:
         status['langsmith_project'] = project
         logger.info(f'[Observabilidad] LangSmith activo en proyecto {project}')
 
-    # 2. Arize Phoenix (Servidor y exportador OpenTelemetry)
-    enable_phoenix = os.getenv('ENABLE_PHOENIX', 'true').lower() == 'true'
+    # 2. Arize Phoenix (Desactivado por defecto en favor de LangSmith)
+    enable_phoenix = os.getenv('ENABLE_PHOENIX', 'false').lower() == 'true'
     if enable_phoenix and not _instrumented:
         try:
             import phoenix as px
